@@ -1,0 +1,16 @@
+Run in terminal, CTR+ALT+T:
+
+sudo apt update
+sudo apt upgrade
+
+sudo apt install python3-pip
+
+pip --version
+
+To install stuff:
+
+sudo pip install MODULENAME
+
+for example: 
+
+sudo pip install gpiozero
