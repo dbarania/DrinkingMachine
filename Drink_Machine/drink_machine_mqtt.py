@@ -2,6 +2,7 @@ import paho.mqtt.client as mqtt
 import RPi.GPIO as GPIO 
 import time
 import math
+import threading
 
 # Configuration
 broker = "192.168.0.197"  # Replace with your broker's address
@@ -50,8 +51,6 @@ GPIO.setup(dist_2_echo_pin, GPIO.IN)
 GPIO.setup(led_1_pin, GPIO.OUT)
 GPIO.setup(led_2_pin, GPIO.OUT)
 
-
-
 def drink_container_levels(client, return_value = 0):
     # distance from sensor 1
     error_1 = 0
@@ -64,11 +63,11 @@ def drink_container_levels(client, return_value = 0):
 
     while GPIO.input(dist_1_echo_pin) == 0:
         StartTime = time.time()
-        if StartTime > 2:
+        if StartTime > 1:
             break
     while GPIO.input(dist_1_echo_pin) == 1:
         StopTime = time.time()
-        if StopTime > 2:
+        if StopTime > 1:
             break
     TimeElapsed = StopTime - StartTime
     distance_1 = (TimeElapsed*34300)/2 # cm from sensor 1
@@ -90,11 +89,11 @@ def drink_container_levels(client, return_value = 0):
 
     while GPIO.input(dist_2_echo_pin) == 0:
         StartTime = time.time()
-        if StartTime > 2:
+        if StartTime > 1:
             break
     while GPIO.input(dist_2_echo_pin) == 1:
         StopTime = time.time()
-        if StopTime > 2:
+        if StopTime > 1:
             break
     TimeElapsed = StopTime - StartTime
     distance_2 = (TimeElapsed*34300)/2 # cm from sensor 1
@@ -117,7 +116,6 @@ def drink_container_levels(client, return_value = 0):
     if error_1 == 1 and error_2 == 1:
         client.publish("drink_machine/messages", f"Invalid readings from distance sensors 1 and 2: {round(distance_1, 1)} cm, {round(distance_2, 1)} cm.")
         client.loop()
-
 
     # publish how much is left in each container
     client.publish("drink_machine/container/1/volume", str(volume_1))
@@ -172,11 +170,11 @@ def calibrate_dist_sensors(client, sensor_1 = 1, sensor_2 = 1):
 
         while GPIO.input(dist_2_echo_pin) == 0:
             StartTime = time.time()
-            if StartTime > 2:
+            if StartTime > 1:
                 break
         while GPIO.input(dist_2_echo_pin) == 1:
             StopTime = time.time()
-            if StopTime > 2:
+            if StopTime > 1:
                 break
         TimeElapsed = StopTime - StartTime
         distance_2 = (TimeElapsed*34300)/2 # cm from sensor 2
@@ -189,23 +187,29 @@ def calibrate_dist_sensors(client, sensor_1 = 1, sensor_2 = 1):
         client.loop()
 
 def mix_drink(client, drink):
+    global drink_size
     if drink == "soda":
-        time_1 = drink_size/(flow_rate_pump_1/60) # how long to run the pump
-        # update drink machine status
-        client.publish("drink_machine/status", "Pouring soda...")
-        client.loop()
-        client.publish("drink_machine/pump/1", "On")
-        client.loop()
-        GPIO.output(pump_1_pin, GPIO.HIGH)
-        time.sleep(time_1) # run pump
-        GPIO.output(pump_1_pin, GPIO.LOW)
-        client.publish("drink_machine/pump/1", "Off")
-        # update drink machine status
-        client.publish("drink_machine/status", "Idle")
-        client.loop()
-        # update container levels
-        drink_container_levels(client)
-
+        volume_1, volume_2 = drink_container_levels(client, 1)
+        if volume_1 > drink_size:
+            time_1 = float(drink_size/(flow_rate_pump_1/60)) # how long to run the pump
+            # update drink machine status
+            client.publish("drink_machine/status", "Pouring soda...")
+            client.loop()
+            client.publish("drink_machine/pump/1", "On")
+            client.loop()
+            GPIO.output(pump_1_pin, GPIO.HIGH)
+            start_time = time.monotonic()
+            while time.monotonic() - start_time < time_1:
+                client.loop(timeout=0.1)
+            GPIO.output(pump_1_pin, GPIO.LOW)
+            client.publish("drink_machine/pump/1", "Off")
+            # update drink machine status
+            client.publish("drink_machine/status", "Idle")
+            client.loop()
+            # update container levels
+            drink_container_levels(client)
+        else:
+            client.publish("drink_machine/messages", "Container 1 needs to be refilled before system can continue.")
     # add elsif for each drink
 
     else:
@@ -228,7 +232,9 @@ def pump_pour(client, message, pump_number):
                 client.loop()
                 client.publish("drink_machine/status", f"Pouring {liters} liters from container 1")
                 client.loop()
-                time.sleep(runtime)  # Run the pump for the specified time
+                start_time = time.monotonic()
+                while time.monotonic() - start_time < runtime:
+                    client.loop(timeout=0.1)                
                 GPIO.output(pump_1_pin, GPIO.LOW)
                 client.publish("drink_machine/pump/1", "Off")
                 client.loop()
@@ -253,7 +259,9 @@ def pump_pour(client, message, pump_number):
                 GPIO.output(pump_2_pin, GPIO.HIGH)
                 client.publish("drink_machine/status", f"Pouring {liters} liters from container 2")
                 client.loop()
-                time.sleep(runtime)  # Run the pump for the specified time
+                start_time = time.monotonic()
+                while time.monotonic() - start_time < runtime:
+                    client.loop(timeout=0.1)    
                 GPIO.output(pump_2_pin, GPIO.LOW)
                 client.publish("drink_machine/status", "Idle")
                 client.loop()
@@ -272,16 +280,28 @@ def pump_run(client, message, pump_number):
         try:
             _, number = message.split("run")
             runtime = int(number)  # Convert to an integer
-            
+            n = runtime
             if runtime > 10:  # Cap the runtime at 10 seconds
                 runtime = 10
             
             GPIO.output(pump_1_pin, GPIO.HIGH)
-            client.publish("drink_machine/status", f"Running pump 1 for {runtime} seconds")
-            client.loop()
             client.publish("drink_machine/pump/1", "On")
             client.loop()
-            time.sleep(runtime)  # Run the pump for the specified time
+            start_time = time.monotonic()
+            last_updated_time = start_time
+            client.publish("drink_machine/status", f"Running pump 1 for {n} seconds...")
+            client.loop()
+            n -= 1
+            while time.monotonic() - start_time < runtime:
+                if GPIO.input(pump_1_pin) == GPIO.HIGH:
+                    current_time = time.monotonic()
+                    if current_time - last_updated_time >= 1:
+                        client.publish("drink_machine/status", f"Running pump 1 for {n} seconds...")
+                        n -= 1
+                        last_updated_time = current_time
+                    client.loop(timeout=0.1)   
+                else:
+                    break
             GPIO.output(pump_1_pin, GPIO.LOW)
             client.publish("drink_machine/pump/1", "Off")     
             client.loop()           
@@ -289,22 +309,34 @@ def pump_run(client, message, pump_number):
             client.loop()
         except ValueError:
             # If message doesn't contain a valid number, handle the error
-            client.publish("drink_machine/messages", "Invalid runtime specified for pump 1. Must be below 10 seconds. ")
+            client.publish("drink_machine/messages", "Invalid runtime specified for pump 1. Can be max 10 seconds.")
             client.loop()
     else:
         # Extract the runtime from the message
         try:
             _, number = message.split("run")
             runtime = int(number)  # Convert to an integer
+            n = runtime
             if runtime > 10:  # Cap the runtime at 10 seconds
                 runtime = 10
-            
             GPIO.output(pump_2_pin, GPIO.HIGH)
             client.publish("drink_machine/pump/2", "On")
             client.loop()
-            client.publish("drink_machine/status", f"Running pump 2 for {runtime} seconds")
+            start_time = time.monotonic()
+            last_updated_time = start_time
+            client.publish("drink_machine/status", f"Running pump 2 for {n} seconds...")
             client.loop()
-            time.sleep(runtime)  # Run the pump for the specified time
+            n -= 1
+            while time.monotonic() - start_time < runtime:
+                if GPIO.input(pump_2_pin) == GPIO.HIGH:
+                    current_time = time.monotonic()
+                    if current_time - last_updated_time >= 1:
+                        client.publish("drink_machine/status", f"Running pump 2 for {n} seconds...")
+                        n -= 1
+                        last_updated_time = current_time
+                    client.loop(timeout=0.1)   
+                else:
+                    break 
             GPIO.output(pump_2_pin, GPIO.LOW)
             client.publish("drink_machine/pump/2", "Off")
             client.loop()
@@ -315,30 +347,154 @@ def pump_run(client, message, pump_number):
             client.publish("drink_machine/messages", "Invalid runtime specified for pump 2. Must be below 10 seconds.")
             client.loop()
 
+def stop_pumps(client):
+    GPIO.output(pump_1_pin, GPIO.LOW)
+    GPIO.output(pump_2_pin, GPIO.LOW)
+    client.publish("drink_machine/pump/1", "Off")
+    client.loop()
+    client.publish("drink_machine/pump/2", "Off")
+    client.loop()
+    client.publish("drink_machine/status", "Idle")
+    client.loop()
+    client.publish("drink_machine/messages", "Pumps stopped.")
+    client.loop()
+
+def calibrate_pump(client, message, pump_number):
+    global flow_rate_pump_1
+    global flow_rate_pump_2
+    _, number = message.split("calibrate")
+    runtime = int(number)
+    n = runtime
+    completed = True
+    volume_1, volume_2 = drink_container_levels(client, 1)
+    if pump_number == 1:
+        if volume_1 < 1:
+            client.publish("drink_machine/messages", "The container needs at least 1 liter before calibration can start.")
+            client.loop()
+        else:
+            try:
+                if runtime < 5 or runtime > 10:
+                    raise ValueError("Not valid number")
+                GPIO.output(pump_1_pin, GPIO.HIGH)
+                client.publish("drink_machine/pump/1", "On")
+                client.loop()
+                start_time = time.monotonic()
+                last_updated_time = start_time
+                client.publish("drink_machine/status", f"Calibrating pump 1 for {n} seconds...")
+                client.loop()
+                n -= 1
+                while time.monotonic() - start_time < runtime:
+                    if GPIO.input(pump_1_pin) == GPIO.HIGH:
+                        current_time = time.monotonic()
+                        if current_time - last_updated_time >= 1:
+                            client.publish("drink_machine/status", f"Calibrating pump 1 for {n} seconds...")
+                            n -= 1
+                            last_updated_time = current_time
+                        client.loop(timeout=0.1)   
+                    else:
+                        completed = False
+                        break  
+                if completed == True:
+                    GPIO.output(pump_1_pin, GPIO.LOW)
+                    client.publish("drink_machine/pump/1", "Off")
+                    client.loop()
+                    client.publish("drink_machine/status", "Idle")
+                    client.loop()
+                    new_volume_1, new_volume_2 = drink_container_levels
+                    pumped_volume = volume_1 - new_volume_1
+                    flow_rate_pump_1 = pumped_volume * (runtime / 60)
+                    client.publish("drink_machine/messages", f"Pumped {pumped_volume} liters.\nFlow rate for pump 1 updated to {flow_rate_pump_1} liters/min.")
+                    client.loop()
+                else:
+                    client.publish("drink_machine/messages", "Pump 1 calibration cancelled.")
+
+            except ValueError:
+                client.publish("drink_machine/messages", "Calibration time needs to be between 5 and 10 seconds.")
+                client.loop()
+
+    elif pump_number == 2:
+        if volume_2 < 1:
+            client.publish("drink_machine/messages", "The container needs at least 1 liter before calibration can start.")
+            client.loop()
+        else:
+            try:
+                if runtime < 5 or runtime > 10:
+                    raise ValueError("Not valid number")
+                GPIO.output(pump_2_pin, GPIO.HIGH)
+                client.publish("drink_machine/pump/2", "On")
+                client.loop()
+                start_time = time.monotonic()
+                last_updated_time = start_time
+                client.publish("drink_machine/status", f"Calibrating pump 2 for {n} seconds...")
+                client.loop()
+                n -= 1
+                while time.monotonic() - start_time < runtime:
+                    if GPIO.input(pump_2_pin) == GPIO.HIGH:
+                        current_time = time.monotonic()
+                        if current_time - last_updated_time >= 1:
+                            client.publish("drink_machine/status", f"Calibrating pump 2 for {n} seconds...")
+                            n -= 1
+                            last_updated_time = current_time
+                        client.loop(timeout=0.1)   
+                    else:
+                        completed = False
+                        break  
+                if completed == True:
+                    GPIO.output(pump_2_pin, GPIO.LOW)
+                    client.publish("drink_machine/pump/2", "Off")
+                    client.loop()
+                    client.publish("drink_machine/status", "Idle")
+                    client.loop()
+                    new_volume_1, new_volume_2 = drink_container_levels
+                    pumped_volume = volume_2 - new_volume_2
+                    flow_rate_pump_2 = pumped_volume * (runtime / 60)
+                    client.publish("drink_machine/messages", f"Pumped {pumped_volume} liters.\nFlow rate for pump 2 updated to {flow_rate_pump_2} liters/min.")
+                    client.loop()
+                else:
+                    client.publish("drink_machine/messages", "Pump 2 calibration cancelled.")
+
+            except ValueError:
+                client.publish("drink_machine/messages", "Calibration time needs to be between 5 and 10 seconds.")
+                client.loop()
+
 def commands(client):
-    message = """
-    topic: car/drink
+    message = """topic: car/drink
     1: soda
-    topic: control
+topic: control
     1: container_levels (updates how many liters are left in all containers)
     2: calibrate dist sensors (run when both containers are empty)
     3: calibrate dist sensor 1 (run when container 1 is empty)
     4: calibrate dist sensor 2 (run when container 2 is empty)
-    5: pump_1 run x (run pump 1 for x seconds. x is int <= 10)
-    6: pump_2 run x (run pump 2 for x seconds. x is int <= 10)
-    7: pump_1 pour x (pour x liters from container 1. x is float <= 1)
-    8: pump_2 pour x (pour x liters from container 2. x is float <= 1)
-    9: commands (show all commands)
-    """
+    5: pump_1 calibrate x (calibrate pump 1. Turns on pump 1 for x seconds)
+    6: pump_2 calibrate x (calibrate pump 2. Turns on pump 2 for x seconds)
+    7: pump_1 run x (run pump 1 for x seconds. x is int <= 10)
+    8: pump_2 run x (run pump 2 for x seconds. x is int <= 10)
+    9: pump_1 pour x (pour x liters from container 1. x is float <= 1)
+    10: pump_2 pour x (pour x liters from container 2. x is float <= 1)
+    11: stop (stops any running pump)
+    12: commands (show all commands)"""
     client.publish("drink_machine/messages", message)
     client.loop()
+
+
+def calibrate_pump_threaded(client, message, pump_number):
+    threading.Thread(target=calibrate_pump, args=(client, message, pump_number)).start()
+
+def mix_drink_threaded(client, drink):
+    threading.Thread(target=mix_drink, args=(client, drink)).start()
+
+def pump_pour_threaded(client, message, pump_number):
+    threading.Thread(target=pump_pour, args=(client, message, pump_number)).start()
+
+def pump_run_threaded(client, message, pump_number):
+    threading.Thread(target=pump_run, args=(client, message, pump_number)).start()
 
 # Define actions based on messages
 def perform_action(client, topic, message):
 #    print(f"Action triggered by message '{message}' on topic '{topic}'")
     # Example: Publish a response
     if topic == "car/drink":
-        mix_drink(client, message)
+        mix_drink_threaded(client, message)
     elif topic == "control":
         if message == "container_levels":
             drink_container_levels(client)
@@ -348,14 +504,20 @@ def perform_action(client, topic, message):
             calibrate_dist_sensors(client, 1, 0)
         elif message == "calibrate dist sensor 2":
             calibrate_dist_sensors(client, 0, 1)
+        elif message.startswith("pump_1 calibrate"):
+            calibrate_pump_threaded(client, message, 1)
+        elif message.startswith("pump_2 calibrate"):
+            calibrate_pump_threaded(client, message, 2)
         elif message.startswith("pump_1 run"):
-            pump_run(client, message, 1)
+            pump_run_threaded(client, message, 1)
         elif message.startswith("pump_2 run"):
-            pump_run(client, message, 2)
+            pump_run_threaded(client, message, 2)
         elif message.startswith("pump_1 pour"):
-            pump_pour(client, message, 1)
+            pump_pour_threaded(client, message, 1)
         elif message.startswith("pump_2 pour"):
-            pump_pour(client, message, 2)
+            pump_pour_threaded(client, message, 2)
+        elif message == "stop":
+            stop_pumps(client)
         elif message == "commands":
             commands(client)
         else:
@@ -390,7 +552,7 @@ def on_message(client, userdata, msg):
     topic = msg.topic
     message = msg.payload.decode().strip()
     
-    if topic == "control" and message == "stop":
+    if topic == "control" and message == "exit":
         client.publish("drink_machine/status", "Received stop command. Shutting down...")
         RUNNING = False
 
