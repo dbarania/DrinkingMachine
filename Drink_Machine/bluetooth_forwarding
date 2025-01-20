@@ -1,0 +1,66 @@
+import bluetooth
+import paho.mqtt.client as mqtt
+
+# MQTT setup
+broker_address = "localhost"  # Replace with your broker address
+mqtt_topic_receive = "drink_machine/to_arduino"  # Topic to receive data for Arduino
+mqtt_topic_send = "drink_machine/from_arduino"  # Topic to send data from Arduino
+
+# Bluetooth setup
+target_address = "XX:XX:XX:XX:XX:XX"  # Replace with the Arduino's MAC address
+port = 1
+
+# Initialize MQTT client
+mqtt_client = mqtt.Client("BluetoothRelay")
+
+# Define callback for when a message is received
+def on_message(client, userdata, message):
+    try:
+        data_to_send = message.payload.decode("utf-8").strip()
+        print(f"MQTT Received: {data_to_send}")
+        
+        # Send data to Arduino via Bluetooth
+        if sock:
+            sock.send(data_to_send)
+            print(f"Sent to Arduino: {data_to_send}")
+        else:
+            print("Bluetooth connection not established.")
+    except Exception as e:
+        print(f"Error sending to Arduino: {e}")
+
+# Connect to MQTT broker
+mqtt_client.on_message = on_message
+mqtt_client.connect(broker_address)
+mqtt_client.subscribe(mqtt_topic_receive)
+mqtt_client.loop_start()  # Start the MQTT loop in a separate thread
+
+# Bluetooth setup
+sock = None
+try:
+    sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+    sock.connect((target_address, port))
+    print("Connected to Arduino Nano")
+    
+    while True:
+        # Receive data from Arduino via Bluetooth
+        try:
+            data_from_arduino = sock.recv(1024).decode("utf-8").strip()
+            print(f"Received from Arduino: {data_from_arduino}")
+            
+            # Publish to MQTT
+            mqtt_client.publish(mqtt_topic_send, data_from_arduino)
+            print(f"Published to MQTT: {data_from_arduino}")
+        except bluetooth.BluetoothError as e:
+            print(f"Bluetooth receive error: {e}")
+            break
+
+except bluetooth.BluetoothError as e:
+    print(f"Bluetooth connection error: {e}")
+finally:
+    if sock:
+        sock.close()
+        print("Bluetooth socket closed.")
+
+# Stop MQTT loop if the script ends
+mqtt_client.loop_stop()
+mqtt_client.disconnect()
