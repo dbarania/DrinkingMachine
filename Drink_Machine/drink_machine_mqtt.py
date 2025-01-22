@@ -33,9 +33,9 @@ h_bucket = 19.1 # height of the bucket (cm)
 # pins
 pump_1_pin = 18
 pump_2_pin = 19
-dist_1_trigger_pin = 20
+dist_1_trigger_pin = 5
 dist_2_trigger_pin = 21
-dist_1_echo_pin = 22
+dist_1_echo_pin = 6
 dist_2_echo_pin = 23
 led_1_pin = 24 # led for indicating that container 1 needs refilling (turns on with less than a liter left)
 led_2_pin = 25 # led for indicating that container 2 needs refilling (turns on with less than a liter left)
@@ -60,20 +60,18 @@ def drink_container_levels(client, return_value = 0):
     GPIO.output(dist_1_trigger_pin, False)
     StartTime = time.time()
     StopTime = time.time()
-
     while GPIO.input(dist_1_echo_pin) == 0:
         StartTime = time.time()
-        if StartTime > 1:
-            break
     while GPIO.input(dist_1_echo_pin) == 1:
-        StopTime = time.time()
-        if StopTime > 1:
-            break
+        StopTime = time.time()      
     TimeElapsed = StopTime - StartTime
+    print(f"TimeElapsed: {TimeElapsed}")
     distance_1 = (TimeElapsed*34300)/2 # cm from sensor 1
+    print(f"Distance_1: {distance_1}")
     if distance_1 < 0 or distance_1 > dist_to_sensor_1:
         volume_1 = 0
         error_1 = 1
+        print("error distance")
     else:
         # calculate volume
         height_1 = dist_to_sensor_1 - distance_1 # height of liquid from bottom of container
@@ -86,14 +84,15 @@ def drink_container_levels(client, return_value = 0):
     GPIO.output(dist_2_trigger_pin, False)
     StartTime = time.time()
     StopTime = time.time()
-
+    start_time = time.time()
     while GPIO.input(dist_2_echo_pin) == 0:
         StartTime = time.time()
-        if StartTime > 1:
+        if time.time() - start_time > 1:
             break
+    stop_time = time.time()
     while GPIO.input(dist_2_echo_pin) == 1:
         StopTime = time.time()
-        if StopTime > 1:
+        if time.time() - stop_time > 1:
             break
     TimeElapsed = StopTime - StartTime
     distance_2 = (TimeElapsed*34300)/2 # cm from sensor 1
@@ -148,12 +147,8 @@ def calibrate_dist_sensors(client, sensor_1 = 1, sensor_2 = 1):
 
         while GPIO.input(dist_1_echo_pin) == 0:
             StartTime = time.time()
-            if StartTime > 2:
-                break
         while GPIO.input(dist_1_echo_pin) == 1:
             StopTime = time.time()
-            if StopTime > 2:
-                break
         TimeElapsed = StopTime - StartTime
         distance_1 = (TimeElapsed*34300)/2 # cm from sensor 1
         dist_to_sensor_1 = distance_1
@@ -170,12 +165,8 @@ def calibrate_dist_sensors(client, sensor_1 = 1, sensor_2 = 1):
 
         while GPIO.input(dist_2_echo_pin) == 0:
             StartTime = time.time()
-            if StartTime > 1:
-                break
         while GPIO.input(dist_2_echo_pin) == 1:
             StopTime = time.time()
-            if StopTime > 1:
-                break
         TimeElapsed = StopTime - StartTime
         distance_2 = (TimeElapsed*34300)/2 # cm from sensor 2
         dist_to_sensor_2 = distance_2      
