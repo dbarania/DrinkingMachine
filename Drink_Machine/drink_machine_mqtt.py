@@ -84,16 +84,10 @@ def drink_container_levels(client, return_value = 0):
     GPIO.output(dist_2_trigger_pin, False)
     StartTime = time.time()
     StopTime = time.time()
-    start_time = time.time()
     while GPIO.input(dist_2_echo_pin) == 0:
         StartTime = time.time()
-        if time.time() - start_time > 1:
-            break
-    stop_time = time.time()
     while GPIO.input(dist_2_echo_pin) == 1:
         StopTime = time.time()
-        if time.time() - stop_time > 1:
-            break
     TimeElapsed = StopTime - StartTime
     distance_2 = (TimeElapsed*34300)/2 # cm from sensor 1
     if distance_2 < 0 or distance_2 > dist_to_sensor_2:
