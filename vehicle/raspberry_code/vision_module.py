@@ -31,12 +31,13 @@ class VisionModule(GpioModule):
             if M["m00"] != 0:
                 cx = int(M['m10'] / M['m00'])
                 cy = int(M['m01'] / M['m00'])
-                print("CX : " + str(cx) + "  CY : " + str(cy))
-                cv2.circle(image, (cx, cy), 3, (255, 0, 0), -1)
-        cv2.drawContours(image, contours, -1, (0, 255, 0), 3)
+                return cx, cy
+                # print("CX : " + str(cx) + "  CY : " + str(cy))
+                # cv2.circle(image, (cx, cy), 3, (255, 0, 0), -1)
+        # cv2.drawContours(image, contours, -1, (0, 255, 0), 3)
 
-        cv2.imshow("Frame", image)
-        #TODO finish this thing
+        # cv2.imshow("Frame", image)
+        return None
 
     def identify_surroundings(self):
         pass
