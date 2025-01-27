@@ -1,7 +1,7 @@
 NETWORK1="eduroam"
 NETWORK2="GalaxyA52"
 
-TARGET_DIR="~/Drinking_Machine"
+TARGET_DIR="~/DrinkingMachine"
 
 connect_to_network() {
     SSID=$1
@@ -15,7 +15,7 @@ connect_to_network() {
 }
 
 connect_to_network "$NETWORK1"
-
+ls 
 cd "$TARGET_DIR"
 git pull
 

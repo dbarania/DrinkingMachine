@@ -25,8 +25,8 @@
      inkscape:document-units="mm"
      showguides="true"
      inkscape:zoom="0.53858859"
-     inkscape:cx="932.99414"
-     inkscape:cy="314.71146"
+     inkscape:cx="933.9225"
+     inkscape:cy="316.56816"
      inkscape:window-width="1920"
      inkscape:window-height="1016"
      inkscape:window-x="0"
@@ -133,13 +133,14 @@
      inkscape:groupmode="layer"
      id="layer1"><g
        id="g3"
-       transform="matrix(0.26458333,0,0,0.26458333,223.90801,-240.56728)"><g
+       transform="matrix(0.26458333,0,0,0.26458333,384.36548,-345.17411)"><g
          inkscape:label="0"
          id="g4-7" /><g
          inkscape:label="none"
          id="g5-4" /><g
          inkscape:label="Shape2DView002"
-         id="g28"><path
+         id="g28"
+         transform="translate(-676.21039,406.26815)"><path
            style="fill:none;stroke:#000000"
            d="m -22.6772,967.559 v 22.677"
            id="path5-2" /><path

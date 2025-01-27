@@ -2,7 +2,7 @@ import vision_module
 import cv2
 import time
 
-v = vision_module.VisionModule(-1)
+v = vision_module.VisionModule(2)
 
 while True:
     v.new_frame()

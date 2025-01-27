@@ -47,6 +47,7 @@ class Robot:
         self.customer = None
         self.target_marker = None
         self.order_finished = False
+
         self.pi_daemon = pigpio.pi()
         self.vision = VisionModule(CAMERA_ID)
         self.left_motor = Motor(self.pi_daemon, LEFT_MOTOR_PWM_GPIO, LEFT_MOTOR_DIRECTION_GPIOS)
