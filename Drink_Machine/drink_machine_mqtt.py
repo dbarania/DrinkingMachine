@@ -31,13 +31,13 @@ r_top = 14.3 # radius at 10 liter mark (cm)
 h_bucket = 19.1 # height of the bucket (cm)
 
 # pins
-pump_1_pin = 18
-pump_2_pin = 19
+pump_1_pin = 23
+pump_2_pin = 24
 dist_1_trigger_pin = 5
-dist_2_trigger_pin = 21
+dist_2_trigger_pin = 17
 dist_1_echo_pin = 6
-dist_2_echo_pin = 23
-led_1_pin = 24 # led for indicating that container 1 needs refilling (turns on with less than a liter left)
+dist_2_echo_pin = 27
+led_1_pin = 26 # led for indicating that container 1 needs refilling (turns on with less than a liter left)
 led_2_pin = 25 # led for indicating that container 2 needs refilling (turns on with less than a liter left)
 
 # configure pins
@@ -358,7 +358,7 @@ def calibrate_pump(client, message, pump_number):
             client.loop()
         else:
             try:
-                if runtime < 5 or runtime > 10:
+                if runtime < 10 or runtime > 20:
                     raise ValueError("Not valid number")
                 GPIO.output(pump_1_pin, GPIO.HIGH)
                 client.publish("drink_machine/pump/1", "On")
@@ -385,7 +385,7 @@ def calibrate_pump(client, message, pump_number):
                     client.loop()
                     client.publish("drink_machine/status", "Idle")
                     client.loop()
-                    new_volume_1, new_volume_2 = drink_container_levels
+                    new_volume_1, new_volume_2 = drink_container_levels(client, 1)
                     pumped_volume = volume_1 - new_volume_1
                     flow_rate_pump_1 = pumped_volume * (runtime / 60)
                     client.publish("drink_machine/messages", f"Pumped {pumped_volume} liters.\nFlow rate for pump 1 updated to {flow_rate_pump_1} liters/min.")
@@ -394,7 +394,7 @@ def calibrate_pump(client, message, pump_number):
                     client.publish("drink_machine/messages", "Pump 1 calibration cancelled.")
 
             except ValueError:
-                client.publish("drink_machine/messages", "Calibration time needs to be between 5 and 10 seconds.")
+                client.publish("drink_machine/messages", "Calibration time needs to be between 10 and 20 seconds.")
                 client.loop()
 
     elif pump_number == 2:
@@ -403,7 +403,7 @@ def calibrate_pump(client, message, pump_number):
             client.loop()
         else:
             try:
-                if runtime < 5 or runtime > 10:
+                if runtime < 10 or runtime > 20:
                     raise ValueError("Not valid number")
                 GPIO.output(pump_2_pin, GPIO.HIGH)
                 client.publish("drink_machine/pump/2", "On")
@@ -430,7 +430,7 @@ def calibrate_pump(client, message, pump_number):
                     client.loop()
                     client.publish("drink_machine/status", "Idle")
                     client.loop()
-                    new_volume_1, new_volume_2 = drink_container_levels
+                    new_volume_1, new_volume_2 = drink_container_levels(client, 1)
                     pumped_volume = volume_2 - new_volume_2
                     flow_rate_pump_2 = pumped_volume * (runtime / 60)
                     client.publish("drink_machine/messages", f"Pumped {pumped_volume} liters.\nFlow rate for pump 2 updated to {flow_rate_pump_2} liters/min.")
@@ -439,7 +439,7 @@ def calibrate_pump(client, message, pump_number):
                     client.publish("drink_machine/messages", "Pump 2 calibration cancelled.")
 
             except ValueError:
-                client.publish("drink_machine/messages", "Calibration time needs to be between 5 and 10 seconds.")
+                client.publish("drink_machine/messages", "Calibration time needs to be between 10 and 20 seconds.")
                 client.loop()
 
 def commands(client):
