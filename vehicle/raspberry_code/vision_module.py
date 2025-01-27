@@ -3,6 +3,7 @@ import cv2
 
 CAMERA_WIDTH = 320
 CAMERA_HEIGHT = 240
+FPS = 10
 n = 50
 
 
@@ -10,17 +11,23 @@ class VisionModule(GpioModule):
     def __init__(self, camera_id):
         super().__init__()
         self.cam = cv2.VideoCapture(camera_id)
+        self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+        self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+        self.cam.set(cv2.CAP_PROP_FPS, FPS)
         self._frame = None
+        self._aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_100)
+        self._params = cv2.aruco.DetectorParameters()
+        self._detector = cv2.aruco.ArucoDetector(self._aruco_dict, cv2.aruco.DetectorParameters())
 
-    def newFrame(self):
+    def new_frame(self):
         if not self.cam.isOpened():
             print("Camera is not opened")
             return -1
         ret, self._frame = self.cam.read()
+        self._frame = cv2.cvtColor(self._frame, cv2.COLOR_BGR2GRAY)
 
     def line_analysis(self):
-        image = cv2.cvtColor(self._frame, cv2.COLOR_BGR2GRAY)
-        _, image = cv2.threshold(image, 130, 255, cv2.THRESH_BINARY_INV)
+        _, image = cv2.threshold(self._frame, 130, 255, cv2.THRESH_BINARY_INV)
         height = image.shape[0]
         crop_start = int(height * (1 - n / 100))
         image = image[crop_start:, :]
@@ -40,4 +47,5 @@ class VisionModule(GpioModule):
         return None
 
     def identify_surroundings(self):
-        pass
+        corners, ids, _ = self._detector.detectMarkers(self._frame)
+        return ids[0] if ids[0] else None

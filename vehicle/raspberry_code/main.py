@@ -1,23 +1,26 @@
-import pigpio
-from motor import Motor
-from vision_module import VisionModule
-from lcd_controller import LcdController
-from communication_module import CommunicationModule
+import signal
+import sys
 
-LEFT_MOTOR_PWM_GPIO = 18
-LEFT_MOTOR_DIRECTION_GPIOS = (23, 24)
-RIGHT_MOTOR_PWM_GPIO = 13
-RIGHT_MOTOR_DIRECTION_GPIOS = (5, 6)
+import robot
+robot_global = None
 
-I2C_DATA_GPIO = 2
-I2C_CLK_GPIO = 2
 
-CAMERA_ID = 0
+def signal_handler(sig, frame):
+    if isinstance(robot_global, robot.Robot):
+        robot_global.kill_all()
+
+    sys.exit(0)
+
+
+# Register signal handler for Ctrl + C
+signal.signal(signal.SIGINT, signal_handler)
 
 
 def main():
-    pi_daemon = pigpio.pi()
-    communication = CommunicationModule()
-    vision = VisionModule(CAMERA_ID)
-    left_motor = Motor(pi_daemon, LEFT_MOTOR_PWM_GPIO, LEFT_MOTOR_DIRECTION_GPIOS)
-    right_motor = Motor(pi_daemon, RIGHT_MOTOR_PWM_GPIO, RIGHT_MOTOR_DIRECTION_GPIOS)
+    global robot_global
+    robot_global = robot.Robot()
+    robot_global.main_loop()
+
+
+if __name__ == '__main__':
+    main()
