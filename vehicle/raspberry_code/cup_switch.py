@@ -2,7 +2,7 @@ import pigpio
 from gpio_module import GpioModule
 
 
-class CupDiode(GpioModule):
+class CupSwitch(GpioModule):
     def __init__(self, pi: pigpio.pi, diode_pin: int):
         super().__init__(pi)
         self.pi = pi
