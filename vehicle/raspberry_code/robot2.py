@@ -1,5 +1,7 @@
 import enum
 import time
+from pyexpat.errors import messages
+
 import cv2
 import pigpio
 import paho.mqtt.client as mqtt
@@ -22,9 +24,9 @@ I2C_ADDRESS = 0x27
 
 CAMERA_ID = 0
 
-BROKER = "192.168.0.197"  # Replace with your broker's address
-PORT = 1883  # Default MQTT port
-TOPICS = ["customers/new", "control", "drink_machine/drink_status"]  # Topics to subscribe to
+BROKER = "192.168.0.197"
+PORT = 1883
+TOPICS = ["customers/new", "control", "drink_machine/drink_status", "car/command", "car/screen"]
 
 ORDER_PICKED = 10
 ORDER_CANCELED = 11
@@ -93,6 +95,7 @@ class Robot:
             print(f"Failed to connect, return code {rc}")
 
     def on_message(self, client, userdata, msg):
+        print(f"Got a message from {msg.topic} with content: {msg.payload.decode().strip()}")
         topic = msg.topic
         data = msg.payload.decode("utf-8")
         data_int = int(data) if data.isdigit() else None
@@ -220,6 +223,7 @@ class Robot:
         if ret is None:
             print("Don't see a line, going with last control")
         else:
+            print(ret[0])
             bucket = self._analyse_line_results(ret[0])
             self.move_mode(bucket)
         return False

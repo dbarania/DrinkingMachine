@@ -24,3 +24,4 @@ for s in range(5, 10):
     print(f"Motor speed {s / 10} for 2 s")
     motor.update_speed(s / 10)
     sleep(2)
+
