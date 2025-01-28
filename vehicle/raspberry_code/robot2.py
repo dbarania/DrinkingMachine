@@ -140,7 +140,6 @@ class Robot:
                     ret = self.move()
                     if ret:
                         self.state = State.TURNING_TO_CUSTOMER
-
                 case State.TURNING_TO_CUSTOMER:
                     self.turning_left()
                     self.state = State.CUSTOMER_LINE
@@ -222,22 +221,7 @@ class Robot:
             print("Don't see a line, going with last control")
         else:
             bucket = self._analyse_line_results(ret[0])
-            match bucket:
-                case 0:
-                    self.right_motor.update_speed(0.9)
-                    self.left_motor.update_speed(0.5)
-                case 1:
-                    self.right_motor.update_speed(0.95)
-                    self.left_motor.update_speed(0.8)
-                case 2:
-                    self.right_motor.update_speed(1)
-                    self.left_motor.update_speed(1)
-                case 3:
-                    self.right_motor.update_speed(0.8)
-                    self.left_motor.update_speed(0.95)
-                case 4:
-                    self.right_motor.update_speed(0.5)
-                    self.left_motor.update_speed(0.9)
+            self.move_mode(bucket)
         return False
 
     def stop(self):
@@ -256,3 +240,29 @@ class Robot:
     def waiting_drink_loop(self):
         while self.state == State.WAITING_DRINK:
             time.sleep(0.1)
+
+    def move_forward(self):
+        self.right_motor.update_speed(1)
+        self.left_motor.update_speed(1)
+
+    def move_backward(self):
+        self.right_motor.update_speed(-1)
+        self.left_motor.update_speed(-1)
+
+    def move_mode(self, mode):
+        match mode:
+            case 0:
+                self.right_motor.update_speed(0.9)
+                self.left_motor.update_speed(0.5)
+            case 1:
+                self.right_motor.update_speed(0.95)
+                self.left_motor.update_speed(0.8)
+            case 2:
+                self.right_motor.update_speed(1)
+                self.left_motor.update_speed(1)
+            case 3:
+                self.right_motor.update_speed(0.8)
+                self.left_motor.update_speed(0.95)
+            case 4:
+                self.right_motor.update_speed(0.5)
+                self.left_motor.update_speed(0.9)

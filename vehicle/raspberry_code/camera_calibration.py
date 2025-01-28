@@ -4,7 +4,7 @@ from vision_module import VisionModule
 
 
 def main():
-    camera_id = 2  # Change if needed (e.g., 1 for external cameras)
+    camera_id = 0  # Change if needed (e.g., 1 for external cameras)
     vision = VisionModule(camera_id)
 
     while True:
@@ -22,7 +22,7 @@ def main():
         if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
             break
 
-        time.sleep(0.3)  # Add delay to avoid high CPU usage
+        time.sleep(0.1)  # Add delay to avoid high CPU usage
 
     vision.cam.release()
     cv2.destroyAllWindows()
