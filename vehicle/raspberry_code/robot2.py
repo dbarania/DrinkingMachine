@@ -54,14 +54,16 @@ class State(Enum):
 
 class Robot:
 
-    def __init__(self):
+    def __init__(self, i2c=True, camera = True):
         self._state = State.IDLE
         self.pi_daemon = pigpio.pi()
-        self.vision = VisionModule(CAMERA_ID)
+        if camera:
+            self.vision = VisionModule(CAMERA_ID)
         self.left_motor = Motor(self.pi_daemon, LEFT_MOTOR_PWM_GPIO, LEFT_MOTOR_DIRECTION_GPIOS)
         self.right_motor = Motor(self.pi_daemon, RIGHT_MOTOR_PWM_GPIO, RIGHT_MOTOR_DIRECTION_GPIOS)
-        self.lcd_controller = LcdController(self.pi_daemon, I2C_BUS, I2C_ADDRESS)
-        self.cup_diode = CupDiode(self.pi_daemon, PHOTODIODE_GPIO)
+        if i2c:
+            self.lcd_controller = LcdController(self.pi_daemon, I2C_BUS, I2C_ADDRESS)
+        # self.cup_diode = CupDiode(self.pi_daemon, PHOTODIODE_GPIO)
 
         self.client = mqtt.Client('Bartender')
 

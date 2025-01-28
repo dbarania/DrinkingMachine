@@ -1,7 +1,7 @@
 from robot2 import Robot
 import time
 
-r = Robot()
+r = Robot(False, True)
 
 tstart = time.time()
 
