@@ -54,7 +54,7 @@ class State(Enum):
 
 class Robot:
 
-    def __init__(self, i2c=True, camera = True):
+    def __init__(self, i2c=True, camera = True, mqtt=True):
         self._state = State.IDLE
         self.pi_daemon = pigpio.pi()
         if camera:
@@ -64,17 +64,16 @@ class Robot:
         if i2c:
             self.lcd_controller = LcdController(self.pi_daemon, I2C_BUS, I2C_ADDRESS)
         # self.cup_diode = CupDiode(self.pi_daemon, PHOTODIODE_GPIO)
-
-        self.client = mqtt.Client('Bartender')
-
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
-        # self.client.on_disconnect = self.on_disconnect
         self.customer = None
         self.target_marker = None
-        # Connect to the broker asynchronously (non-blocking)
-        self.client.connect_async(BROKER, PORT, 60)
-        self.client.loop_start()  # Start non-blocking loop
+        if mqtt:
+            self.client = mqtt.Client('Bartender')
+            self.client.on_connect = self.on_connect
+            self.client.on_message = self.on_message
+            # self.client.on_disconnect = self.on_disconnect
+            # Connect to the broker asynchronously (non-blocking)
+            self.client.connect_async(BROKER, PORT, 60)
+            self.client.loop_start()  # Start non-blocking loop
         self.delivering = False
 
     @property

@@ -4,7 +4,7 @@ import pigpio
 from motor import Motor
 from robot2 import Robot
 
-r = Robot(False, False)
+r = Robot(False, False, False)
 r.move_forward()
 print("Driving forward for 3s")
 sleep(3)
@@ -34,4 +34,4 @@ print("Rotate in place right for 3s")
 r.rotate_in_place(-1)
 sleep(3)
 
-r.stop_connection()
+# r.stop_connection()
