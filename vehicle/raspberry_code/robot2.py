@@ -73,8 +73,7 @@ class Robot:
         # Connect to the broker asynchronously (non-blocking)
         self.client.connect_async(BROKER, PORT, 60)
         self.client.loop_start()  # Start non-blocking loop
-
-        self.customer_queue = []
+        self.delivering = False
 
     @property
     def state(self):
@@ -102,11 +101,9 @@ class Robot:
         match topic:
             case "customers/new":
                 if data_int:
-                    self.customer_queue.append(data_int)
-                    if len(self.customer_queue) == 1:
-                        self.customer = self.customer[0]
-                        self.target_marker = self.customer
-                        self.state = State.MAIN_LINE
+                    self.customer = self.customer[0]
+                    self.target_marker = self.customer
+                    self.state = State.MAIN_LINE
             case "car/screen":
                 self.lcd_controller.write_new_line(data)
             case "car/command":
@@ -117,6 +114,8 @@ class Robot:
             case "drink_machine/drink_status":
                 if data_int == 1:
                     self.state = State.MAIN_LINE
+                    self.target_marker = self.customer
+                    self.delivering = True
 
     def publish(self, topic, message):
 
@@ -155,7 +154,7 @@ class Robot:
                 case State.ORDERING:
                     self.ordering_loop()
                 case State.WAITING_CUP:
-                    self.waiting_cup_loop(0)
+                    self.waiting_cup_loop(self.delivering)
                     self.state = State.ROTATING_180
                 case State.ROTATING_180:
                     self.rotate_180()
@@ -168,7 +167,11 @@ class Robot:
                         self.state = State.TURNING_TO_MAIN
                 case State.TURNING_TO_MAIN:
                     self.turning_left()
-                    self.state = State.GOING_TO_MACHINE
+                    if self.delivering:
+                        #TODO finish this logic
+                        self.state = State.IDLE
+                    else:
+                        self.state = State.GOING_TO_MACHINE
                     self.target_marker = BASE
                 case State.GOING_TO_MACHINE:
                     ret = self.move()
@@ -213,11 +216,13 @@ class Robot:
         self.left_motor.update_speed(speed_left)
 
     def move(self):
+        t1 = time.time()
         self.vision.new_frame()
         marker_id = self.vision.identify_surroundings()
         if marker_id is not None:
             self.publish("car/position", marker_id)
             if marker_id == self.target_marker:
+                print(f"Early: {time.time() - t1}")
                 return True
         ret = self.vision.line_analysis()
         if ret is None:
@@ -226,6 +231,7 @@ class Robot:
             print(ret[0])
             bucket = self._analyse_line_results(ret[0])
             self.move_mode(bucket)
+        print(f"Regular: {time.time() - t1}")
         return False
 
     def stop(self):
@@ -240,6 +246,9 @@ class Robot:
         status = False
         while status != target:
             status = self.cup_diode.read()
+        if target:
+            print("delivery finished")
+            self.publish('customer/status', "finished")
 
     def waiting_drink_loop(self):
         while self.state == State.WAITING_DRINK:
