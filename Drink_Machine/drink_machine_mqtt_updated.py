@@ -7,7 +7,7 @@ import threading
 # Configuration
 broker = "192.168.0.197"  # Replace with your broker's address
 port = 1883  # Default MQTT port 
-topics = ["car/status", "customer/1", "customer/2", "drink", "control"]  # Topics to subscribe to
+topics = ["customer/1", "car/status", "customer/1", "customer/2", "drink", "control"]  # Topics to subscribe to
 
 #response_topics = # topics for responses
 # ["drink_machine/messages", # for error messages and so on 
@@ -37,7 +37,7 @@ dist_1_trigger_pin = 5
 dist_2_trigger_pin = 17
 dist_1_echo_pin = 6
 dist_2_echo_pin = 27
-led_1_pin = 26 # led for indicating that container 1 needs refilling (turns on with less than a liter left)
+led_1_pin = 22 # led for indicating that container 1 needs refilling (turns on with less than a liter left)
 led_2_pin = 25 # led for indicating that container 2 needs refilling (turns on with less than a liter left)
 
 # configure pins
@@ -51,59 +51,153 @@ GPIO.setup(dist_2_echo_pin, GPIO.IN)
 GPIO.setup(led_1_pin, GPIO.OUT)
 GPIO.setup(led_2_pin, GPIO.OUT)
 
-number_of_customers = 2
 drinks = ("Gin & tonic", "Gin", "Tonic")
 order_queue = []
 menu_index = 0 # Index of drink currently shown on the ordering screen
+cancel_flag = 0
+car_status = "Idle" # Idle or Busy
 
 class customer:
     def __init__(self, number):
         self.number = number
-        self.status = "idle" # idle, waiting, ordering
+        self.status = "Idle" # Idle, In queue, Ordering, Waiting for drink
         self.shake_count = 0 # cancel order if coaster is shaken 3 times in a row
-        self.timer = 0
 
 customer1 = customer(1)
 customer2 = customer(2)
 
-def queue(customer, add=1):
-    # add: 1 for add to queue, 0 for remove from queue
-    # customer: customer number (position, 1 or 2)
-    global order_queue
-    if customer == 1:
-        customer1.status = "waiting"
-    elif customer == 2:
-        customer2.status = " waiting"
-    if add == 1 and customer not in order_queue:
-        order_queue.append(customer)
-    elif add == 0:
-        order_queue.pop(customer)
-
-def ordering(client ,command):
-    # cycle through the menu and publish to screen
-    # commands: left, right, cancel, confirm
+def update_car(client, message):
+    global customer1
+    global customer2
     global menu_index
     global drinks
-    if command == "left":
+    global order_queue, car_status
+    if message == "IDLE" and len(order_queue) > 0: # if car is idle send to customer
+        client.publish("car/command", f"{order_queue[0]}")
+        client.loop()
+        car_status = "Busy"
+    elif message == "ORDERING":
+        if order_queue[0] == 1:
+            customer1.status = "Ordering"
+            client.publish("car/screen", f"{drinks[menu_index]}")
+            client.loop()
+            client.publish("customer/1/order", "start")
+            client.loop()
+        elif order_queue[0] == 2:
+            customer2.status = "Ordering"
+            client.publish("car/screen", f"{drinks[menu_index]}")
+            client.loop()
+            client.publish("customer/2/order", "start")
+            client.loop()
+    elif message == "WAITING_DRINK":
+        drink = drinks[menu_index]
+        mix_drink(client, drink)
+        menu_index = 0
+        order_queue.pop(0)
+        client.publish("ordering_queue", f"{order_queue}")
+        client.loop()
+
+
+def customer_status(client, topic, message):
+    global customer1
+    global customer2    
+    customer = int(topic.split("/")[-1])
+    if customer == 1:
+        if customer1.status == "In queue" and message == "shake":
+            customer1.shake_count += 1
+            if customer1.shake_count >= 3:
+                queue(client, topic, 0)
+                customer1.shake_count = 0
+        elif customer1.status == "Idle" and message != "shake":
+            queue(client, topic)
+        elif customer1.status == "Ordering":
+            ordering(client, message, topic)
+    elif customer == 2:
+        if customer2.status == "In queue" and message == "shake":
+            customer2.shake_count += 1
+            if customer2.shake_count >= 3:
+                queue(client, topic, 0)
+        elif customer2.status == "Idle" and message != "shake":
+            queue(client, topic)
+        elif customer2.status == "Ordering":
+            ordering(client, message, topic)
+
+def queue(client, topic, add=1):
+    global customer1
+    global customer2    
+    # add: 1 for add to queue, 0 for remove from queue
+    # customer: customer number (position, 1 or 2)
+    global order_queue, car_status
+    customer = int(topic.split("/")[-1])
+    if add == 1 and customer not in order_queue:
+        order_queue.append(customer)
+        if car_status == "Idle":
+            client.publish("car/command", f"{order_queue[0]}")
+            client.publish()
+            car_status = "Busy"
+        if customer == 1:
+            customer1.status = "In queue"
+        elif customer == 2:
+            customer2.status = "In queue"        
+    elif add == 0:
+        order_queue.remove(customer)
+        if customer == 1:
+            customer1.status = "Idle"
+        elif customer == 2:
+            customer2.status = "Idle"
+    client.publish("ordering_queue", f"{order_queue}")
+    client.loop()
+
+def ordering(client ,message, topic):
+    global customer1
+    global customer2    
+    # cycle through the menu and publish to screen
+    # commands: left, right, cancel, confirm
+    global order_queue
+    global menu_index
+    global drinks
+    global cancel_flag
+    customer = int(topic.split("/")[-1])
+    if message == "left":
         menu_index -= 1
         if menu_index == -1:
             menu_index = len(drinks) - 1
         client.publish("car/screen", f"{drinks[menu_index]}")
         client.loop()
-    elif command == "right":
+    elif message == "right":
         menu_index += 1
         if menu_index == len(drinks):
             menu_index = 0
         client.publish("car/screen", f"{drinks[menu_index]}")
         client.loop()
-    elif command == "cancel":
-        menu_index = 0
-        client.publish("car/command", "cancel")
-        client.loop()
-    elif command == "confirm":
-        menu_index = 0
+    elif message == "cancel" or message == "timeout":
+        if cancel_flag == 1 or message == "timeout":
+            menu_index = 0
+            client.publish("car/command", "cancel")
+            client.loop()
+            if len(order_queue) > 0:
+                client.publish("car/command", f"{order_queue[menu_index]}")
+                client.loop()
+            if customer == 1:
+                customer1.status = "Idle"
+                client.publish("customer/1/order", "stop")
+                client.loop()
+            elif customer == 2:
+                customer2.status = "Idle"   
+                client.publish("customer/2/order", "stop") 
+                client.loop()  
+            cancel_flag = 0
+        else:
+            cancel_flag = 1
+            client.publish("car/screen", "Shake again to cancel")
+            client.loop()
+    elif message == "confirm":
         client.publish("car/command", "confirm")
         client.loop()
+        if customer == 1:
+            customer1.status = "Waiting for drink"
+        elif customer == 2:
+            customer2.status = "Waiting for drink"
 
 
 def drink_container_levels(client, return_value = 0):
@@ -229,7 +323,7 @@ def mix_drink(client, drink):
     gin_ratio = 0.5
     tonic_ratio = 1 - gin_ratio
     volume_1, volume_2 = drink_container_levels(client, 1)
-    if drink == "gin&tonic":
+    if drink == "Gin & tonic":
         if volume_1 > drink_size * gin_ratio and volume_2 > drink_size * tonic_ratio:
             client.publish("drink_machine/drink_status", "0")
             client.loop()
@@ -273,7 +367,7 @@ def mix_drink(client, drink):
             client.publish("drink_machine/messages", "Container 2 needs to be refilled before system can continue.")
             client.loop()
     # add elsif for each drink
-    elif drink == "gin":
+    elif drink == "Gin":
         if volume_1 > drink_size:
             client.publish("drink_machine/drink_status", "0")
             client.loop()
@@ -294,16 +388,13 @@ def mix_drink(client, drink):
             client.loop()  
             # send ready signal to the car
             client.publish("drink_machine/drink_status", "1")
-            client.loop()
-            # send ready signal to the car
-            client.publish("drink_machine/drink_status", "1")
-            client.loop()            
+            client.loop()         
             # update container levels
             drink_container_levels(client)            
         else:
             client.publish("drink_machine/messages", "Container 1 needs to be refilled before system can continue.")
             client.loop()
-    elif drink == "tonic":
+    elif drink == "Tonic":
         if volume_2 > drink_size * tonic_ratio:
             client.publish("drink_machine/drink_status", "0")
             client.loop()
@@ -580,9 +671,9 @@ def calibrate_pump(client, message, pump_number):
 
 def commands(client):
     message = """topic: drink
-    1: gin
-    2: tonic
-    3: gin&tonic
+    1: Gin
+    2: Tonic
+    3: Gin & tonic
 topic: control
     1: container_levels (updates how many liters are left in all containers)
     2: calibrate dist sensors (run when both containers are empty)
@@ -643,6 +734,10 @@ def perform_action(client, topic, message):
         else:
             client.publish("drink_machine/messages", "Recieved unknown control command.\nUse 'commands' to see all commands.")
             client.loop()
+    elif topic == "customer/1" or topic == "customer/2":
+        customer_status(client, topic, message)
+    elif topic == "car/status":
+        update_car(client, message)
 
 # Callback for when the client connects to the broker
 def on_connect(client, userdata, flags, rc):
