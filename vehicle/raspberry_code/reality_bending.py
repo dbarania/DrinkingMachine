@@ -32,7 +32,7 @@ from lcd_controller import LcdController
 #
 #
 # curses.wrapper(main)
-drinks = ["Gin & Tonic", "Gin", "Tonic"]
+drinks = ["Gin & Tonic", "Gin", "Tonic", ' ']
 i = 0
 
 
