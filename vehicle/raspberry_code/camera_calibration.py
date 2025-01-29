@@ -16,16 +16,17 @@ def main():
         print(marker_id)
 
         # Display the current frame for visual debugging
-        # cv2.imshow("Processed Frame", vision._frame)
-        # cv2.imshow("Threshold Frame", vision._threshold_frame)
+        cv2.imshow("Processed Frame", vision._frame)
+        cv2.imshow("Threshold Frame", vision._threshold_frame)
 
-        # if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
-        #     break
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to exit
+            break
 
         time.sleep(0.1)  # Add delay to avoid high CPU usage
-
-    # vision.cam.release()
-    # cv2.destroyAllWindows()
+    vision.frame_writer.release()
+    vision.threshold_writer.release()
+    vision.cam.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

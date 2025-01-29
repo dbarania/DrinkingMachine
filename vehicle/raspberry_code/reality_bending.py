@@ -74,10 +74,11 @@ class RealityBendingApplication:
             elif key == ord(' '):
                 self.robot.motors_controller.stop()
             elif ord('1') <= key <= ord('3'):
-                drink = drinks[int(key)]
+                drink = drinks[int(chr(key)) - 1]
                 self.robot.lcd_controller.write_new_line(drink)
             stdscr.refresh()
         self.robot.motors_controller.stop()
+        self.robot.vision.release()
 
 
 app = RealityBendingApplication()
