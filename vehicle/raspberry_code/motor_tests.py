@@ -20,8 +20,9 @@ sleep(3)
 print("motor stop")
 motor.update_speed(0)
 
-for s in range(5, 10):
+for s in range(5, 10, .5):
     print(f"Motor speed {s / 10} for 2 s")
     motor.update_speed(s / 10)
     sleep(2)
 
+motor.update_speed(0)
