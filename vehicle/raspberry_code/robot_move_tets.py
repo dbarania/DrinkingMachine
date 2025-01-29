@@ -34,4 +34,5 @@ print("Rotate in place right for 3s")
 r.rotate_in_place(-1)
 sleep(3)
 
+r.stop()
 # r.stop_connection()
