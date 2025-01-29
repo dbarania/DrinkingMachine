@@ -224,7 +224,6 @@ class Robot:
         if marker_id is not None:
             self.publish("car/position", marker_id)
             if marker_id == self.target_marker:
-                print(f"Early: {time.time() - t1}")
                 return True
         ret = self.vision.line_analysis()
         if ret is None:
@@ -233,7 +232,6 @@ class Robot:
             print(ret[0])
             bucket = self._analyse_line_results(ret[0])
             self.move_mode(bucket)
-        print(f"Regular: {time.time() - t1}")
         return False
 
     def stop(self):

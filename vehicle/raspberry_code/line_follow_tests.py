@@ -5,5 +5,7 @@ r = Robot(False, True, False)
 
 tstart = time.time()
 
-while time.time() < tstart + 100:
+while time.time() < tstart + 5:
     r.move()
+
+r.stop()
