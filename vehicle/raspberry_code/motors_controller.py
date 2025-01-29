@@ -12,7 +12,7 @@ RIGHT = -1
 FORWARD = 1
 BACKWARD = -1
 
-DEFAULT_SPEED = 0.8
+DEFAULT_SPEED = 0.75
 
 
 class MotorsController:
@@ -36,12 +36,12 @@ class MotorsController:
         self.right_motor.update_speed(direction * speed)
 
     def move_slight_left(self):
-        self.right_motor.update_speed(DEFAULT_SPEED * 1.1)  # 0.88
-        self.left_motor.update_speed(DEFAULT_SPEED * 0.85)  # 0.68
+        self.right_motor.update_speed(DEFAULT_SPEED * 1.2)  # 0.88
+        self.left_motor.update_speed(DEFAULT_SPEED * 0.75)  # 0.68
 
     def move_slight_right(self):
-        self.right_motor.update_speed(DEFAULT_SPEED * 0.8)  # 0.64
-        self.left_motor.update_speed(DEFAULT_SPEED * 1.1)  # 0.88
+        self.right_motor.update_speed(DEFAULT_SPEED * 0.75)  # 0.64
+        self.left_motor.update_speed(DEFAULT_SPEED * 1.2)  # 0.88
 
     def turning_left(self):
         turn_time = 0.3

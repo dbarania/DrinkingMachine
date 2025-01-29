@@ -67,7 +67,10 @@ class RealityBendingApplication:
             elif key == ord('e'):
                 self.robot.motors_controller.turn_in_place(-1)
 
+            elif key== ord(' '):
+                self.robot.motors_controller
             stdscr.refresh()
+            self.robot.motors_controller.stop()
 
 
 app = RealityBendingApplication()
