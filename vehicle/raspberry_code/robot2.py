@@ -265,17 +265,17 @@ class Robot:
     def move_mode(self, mode):
         match mode:
             case 0:
-                self.right_motor.update_speed(0.72)
-                self.left_motor.update_speed(0.6)
+                self.right_motor.update_speed(0.60)
+                self.left_motor.update_speed(0.5)
             case 1:
-                self.right_motor.update_speed(0.77)
-                self.left_motor.update_speed(0.65)
+                self.right_motor.update_speed(0.67)
+                self.left_motor.update_speed(0.55)
             case 2:
-                self.right_motor.update_speed(0.8)
-                self.left_motor.update_speed(0.8)
+                self.right_motor.update_speed(0.7)
+                self.left_motor.update_speed(0.7)
             case 3:
-                self.right_motor.update_speed(0.65)
-                self.left_motor.update_speed(0.77)
+                self.right_motor.update_speed(0.55)
+                self.left_motor.update_speed(0.67)
             case 4:
-                self.right_motor.update_speed(0.6)
-                self.left_motor.update_speed(0.72)
+                self.right_motor.update_speed(0.5)
+                self.left_motor.update_speed(0.6)
