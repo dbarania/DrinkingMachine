@@ -1,4 +1,6 @@
 import cv2
+import threading
+import time
 from gpio_module import GpioModule
 
 CAMERA_WIDTH = 320
@@ -29,7 +31,13 @@ class VisionModule(GpioModule):
         self.threshold_writer = cv2.VideoWriter("threshold_output.avi", fourcc, FPS, (CAMERA_WIDTH, CAMERA_HEIGHT),
                                                 isColor=False)
 
+        # Threading setup
+        self.stop_event = threading.Event()
+        self.writer_thread = threading.Thread(target=self._write_frames_thread, daemon=True)
+        self.writer_thread.start()
+
     def new_frame(self):
+        """Capture a new frame from the camera"""
         if not self.cam.isOpened():
             print("Camera is not opened")
             return -1
@@ -41,11 +49,8 @@ class VisionModule(GpioModule):
 
         self._frame = cv2.cvtColor(self._frame, cv2.COLOR_BGR2GRAY)
 
-        # Write the grayscale frame to video
-        color_frame = cv2.cvtColor(self._frame, cv2.COLOR_GRAY2BGR)  # Convert back to BGR for saving
-        self.frame_writer.write(color_frame)
-
     def line_analysis(self):
+        """Process the frame for line detection"""
         result = None
         if self._frame is None:
             print("No frame available for analysis")
@@ -74,23 +79,11 @@ class VisionModule(GpioModule):
             print("Taking bottom half of frame")
 
         _, self._threshold_frame = cv2.threshold(self._threshold_frame, 90, 150, cv2.THRESH_BINARY_INV)
-        contours, _ = cv2.findContours(self._threshold_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        if len(contours) > 0:
-            c = max(contours, key=cv2.contourArea)
-            M = cv2.moments(c)
-            if M["m00"] != 0:
-                cx = int(M['m10'] / M['m00'])
-                cy = int(M['m01'] / M['m00'])
-                result = (cx, cy)
-
-        # Convert threshold frame to 3 channels so it can be saved in video
-        threshold_bgr = cv2.cvtColor(self._threshold_frame, cv2.COLOR_GRAY2BGR)
-        self.threshold_writer.write(threshold_bgr)
 
         return result
 
     def identify_surroundings(self):
+        """Detect ArUco markers in the frame"""
         if self._frame is None:
             return None
 
@@ -99,8 +92,24 @@ class VisionModule(GpioModule):
 
         return ids[0] if ids is not None else None
 
+    def _write_frames_thread(self):
+        """Thread function to write frames to video files periodically (every 50ms)"""
+        while not self.stop_event.is_set():
+            self.new_frame()
+            if self._frame is not None:
+                color_frame = cv2.cvtColor(self._frame, cv2.COLOR_GRAY2BGR)  # Convert grayscale to BGR
+                self.frame_writer.write(color_frame)
+
+            if self._threshold_frame is not None:
+                threshold_bgr = cv2.cvtColor(self._threshold_frame, cv2.COLOR_GRAY2BGR)
+                self.threshold_writer.write(threshold_bgr)
+
+            time.sleep(0.05)  # Sleep for 50ms
+
     def release(self):
-        """Release the video writers and camera"""
+        """Release the video writers, camera, and stop the thread"""
+        self.stop_event.set()
+        self.writer_thread.join()
         self.cam.release()
         self.frame_writer.release()
         self.threshold_writer.release()
