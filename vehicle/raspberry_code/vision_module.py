@@ -3,7 +3,7 @@ import cv2
 
 CAMERA_WIDTH = 320
 CAMERA_HEIGHT = 240
-FPS = 10
+FPS = 20
 n = 50
 
 
@@ -96,15 +96,14 @@ class VisionModule(GpioModule):
                 cy = int(M['m01'] / M['m00'])
                 result = (cx, cy)
                 # Draw a red dot (BGR: (0, 0, 255))
-                cv2.circle(self._threshold_frame, (cx, cy), 5, (0, 0, 255), -1)
-                cv2.drawContours(self._threshold_frame, contours, -1, (0, 255, 0), 3)
+                # cv2.circle(self._threshold_frame, (cx, cy), 5, (0, 0, 255), -1)
+                # cv2.drawContours(self._threshold_frame, contours, -1, (0, 255, 0), 3)
 
         return result
 
     def identify_surroundings(self):
         corners, ids, _ = self._detector.detectMarkers(self._frame)
         self.last_corners = corners[0][0] if corners else None
-        print(self.last_corners)
 
         if ids is None:
             return None
