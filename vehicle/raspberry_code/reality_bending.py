@@ -1,6 +1,7 @@
 import robot2
 import curses
-
+import paho.mqtt.client as mqtt
+from lcd_controller import LcdController
 
 #
 #
@@ -31,6 +32,9 @@ import curses
 #
 #
 # curses.wrapper(main)
+drinks = ["Gin & Tonic", "Gin", "Tonic"]
+i = 0
+
 
 class RealityBendingApplication:
     def __init__(self):
@@ -69,6 +73,9 @@ class RealityBendingApplication:
 
             elif key == ord(' '):
                 self.robot.motors_controller.stop()
+            elif ord('1') <= key <= ord('3'):
+                drink = drinks[int(key)]
+                self.robot.lcd_controller.write_new_line(drink)
             stdscr.refresh()
         self.robot.motors_controller.stop()
 
