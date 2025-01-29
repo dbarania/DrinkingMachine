@@ -1,21 +1,13 @@
-import enum
 import time
-from pyexpat.errors import messages
 
 import cv2
 import pigpio
 import paho.mqtt.client as mqtt
 from enum import Enum
-
-from motor import Motor
+import motors_controller
 from vision_module import VisionModule
 from lcd_controller import LcdController
 from cup_switch import CupSwitch
-
-LEFT_MOTOR_PWM_GPIO = 18
-LEFT_MOTOR_DIRECTION_GPIOS = (23, 24)
-RIGHT_MOTOR_PWM_GPIO = 13
-RIGHT_MOTOR_DIRECTION_GPIOS = (5, 6)
 
 SWITCH_GPIO = 10
 
@@ -34,9 +26,6 @@ ORDER_CANCELED = 11
 BASE = 0
 CUSTOMER_ENDPOINT = 10
 
-LEFT = 1
-RIGHT = -1
-
 
 class State(Enum):
     IDLE = 1
@@ -54,25 +43,21 @@ class State(Enum):
 
 class Robot:
 
-    def __init__(self, i2c=True, camera = True, mqtt=True):
+    def __init__(self, i2c=True, camera=True, connection=True):
         self._state = State.IDLE
         self.pi_daemon = pigpio.pi()
         if camera:
             self.vision = VisionModule(CAMERA_ID)
-        self.left_motor = Motor(self.pi_daemon, LEFT_MOTOR_PWM_GPIO, LEFT_MOTOR_DIRECTION_GPIOS)
-        self.right_motor = Motor(self.pi_daemon, RIGHT_MOTOR_PWM_GPIO, RIGHT_MOTOR_DIRECTION_GPIOS)
+        self.motors_controller = motors_controller.MotorsController(self.pi_daemon)
         self.switch = CupSwitch(self.pi_daemon, SWITCH_GPIO)
         if i2c:
             self.lcd_controller = LcdController(self.pi_daemon, I2C_BUS, I2C_ADDRESS)
-        # self.cup_diode = CupDiode(self.pi_daemon, PHOTODIODE_GPIO)
         self.customer = None
         self.target_marker = None
-        if mqtt:
+        if connection:
             self.client = mqtt.Client('Bartender')
             self.client.on_connect = self.on_connect
             self.client.on_message = self.on_message
-            # self.client.on_disconnect = self.on_disconnect
-            # Connect to the broker asynchronously (non-blocking)
             self.client.connect_async(BROKER, PORT, 60)
             self.client.loop_start()  # Start non-blocking loop
         self.delivering = False
@@ -170,7 +155,7 @@ class Robot:
                 case State.TURNING_TO_MAIN:
                     self.turning_left()
                     if self.delivering:
-                        #TODO finish this logic
+                        # TODO finish this logic
                         self.state = State.IDLE
                     else:
                         self.state = State.GOING_TO_MACHINE
@@ -185,16 +170,16 @@ class Robot:
 
     def _analyse_line_results(self, cx, cy=0):
         width = self.vision.cam.get(cv2.CAP_PROP_FRAME_WIDTH)
-        bucket_size = width + 1 // 5
-        bucket = cx // bucket_size
-        return bucket
+        if cx <= 2 * width / 5:
+            mode = 0
+        elif 2 * width / 5 < cx <= 3 * width / 5:
+            mode = 1
+        else:
+            mode = 2
+        return mode
 
     def turning_left(self):
-        turn_time = 0.3
-        self.rotate_in_place(LEFT)
-        time.sleep(turn_time)
-        self.left_motor.update_speed(1)
-        time.sleep(turn_time)
+        self.motors_controller.turning_left()
         while True:
             self.vision.new_frame()
             ret = self.vision.line_analysis()
@@ -203,19 +188,13 @@ class Robot:
 
     def rotate_180(self):
         turn_time = 0.3
-        self.rotate_in_place(LEFT)
+        self.motors_controller.turn_in_place(motors_controller.LEFT)
         time.sleep(turn_time)
         while True:
             self.vision.new_frame()
             ret = self.vision.line_analysis()
             if ret is not None:
                 break
-
-    def rotate_in_place(self, direction=LEFT):
-        speed_left = -0.8 * direction
-        speed_right = 0.8*direction
-        self.right_motor.update_speed(speed_right)
-        self.left_motor.update_speed(speed_left)
 
     def move(self):
         t1 = time.time()
@@ -230,13 +209,13 @@ class Robot:
             print("Don't see a line, going with last control")
         else:
             print(ret[0])
-            bucket = self._analyse_line_results(ret[0])
-            self.move_mode(bucket)
+            mode = self._analyse_line_results(ret[0])
+            print(mode)
+            self.move_mode(mode)
         return False
 
     def stop(self):
-        self.left_motor.update_speed(0)
-        self.right_motor.update_speed(0)
+        self.motors_controller.stop()
 
     def ordering_loop(self):
         while self.state == State.ORDERING:
@@ -254,28 +233,11 @@ class Robot:
         while self.state == State.WAITING_DRINK:
             time.sleep(0.1)
 
-    def move_forward(self):
-        self.right_motor.update_speed(0.8)
-        self.left_motor.update_speed(0.8)
-
-    def move_backward(self):
-        self.right_motor.update_speed(-0.8)
-        self.left_motor.update_speed(-0.8)
-
     def move_mode(self, mode):
         match mode:
             case 0:
-                self.right_motor.update_speed(0.60)
-                self.left_motor.update_speed(0.5)
+                self.motors_controller.move_slight_left()
             case 1:
-                self.right_motor.update_speed(0.67)
-                self.left_motor.update_speed(0.55)
+                self.motors_controller.move_straight(motors_controller.FORWARD)
             case 2:
-                self.right_motor.update_speed(0.7)
-                self.left_motor.update_speed(0.7)
-            case 3:
-                self.right_motor.update_speed(0.55)
-                self.left_motor.update_speed(0.67)
-            case 4:
-                self.right_motor.update_speed(0.5)
-                self.left_motor.update_speed(0.6)
+                self.motors_controller.move_slight_left()

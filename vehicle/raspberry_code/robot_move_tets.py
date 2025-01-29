@@ -1,38 +1,46 @@
 from time import sleep
-
+import sys
+import motors_controller
 import pigpio
-from motor import Motor
-from robot2 import Robot
 
-r = Robot(False, False, False)
-r.move_forward()
-print("Driving forward for 3s")
-sleep(3)
+mode = None
 
-r.move_backward()
-print("Driving backward for 3s")
-sleep(3)
+if len(sys.argv) > 1:
+    mode = int(sys.argv[1])
 
-r.stop()
-print("Stop for 3s")
-sleep(3)
-
-for i in range(0, 5):
-    r.move_mode(i)
-    print(f"Moving mode {i} for 3s")
+pid = pigpio.pi()
+controller = motors_controller.MotorsController(pid)
+print("Controller initialized")
+if mode == 1 or mode is None:
+    print("Moving forward for 3s")
+    controller.move_straight()
     sleep(3)
+    controller.stop()
+    sleep(1)
 
-print("Stop for 1s")
-r.stop()
-sleep(1)
+if mode == 2 or mode is None:
+    print("Moving backward for 3s")
+    controller.move_straight(motors_controller.BACKWARD)
+    sleep(3)
+    controller.stop()
+    sleep(1)
 
-print("Rotate in place left for 3s")
-r.rotate_in_place(1)
-sleep(3)
+if mode == 3 or mode is None:
+    for i in range(10, 21):
+        controller.move_straight(speed=i / 20)
+        print(f"Speed {i / 20} 2s")
+        sleep(2)
 
-print("Rotate in place right for 3s")
-r.rotate_in_place(-1)
-sleep(3)
+    controller.stop()
+    sleep(1)
 
-r.stop()
-# r.stop_connection()
+if mode == 4 or mode is None:
+    print("slight left")
+    controller.move_slight_left()
+    sleep(2)
+if mode == 5 or mode is None:
+    print("slight right")
+    controller.move_slight_right()
+    sleep(2)
+
+controller.stop()
