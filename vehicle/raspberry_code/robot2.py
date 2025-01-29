@@ -10,14 +10,14 @@ from enum import Enum
 from motor import Motor
 from vision_module import VisionModule
 from lcd_controller import LcdController
-from cup_diode import CupDiode
+from cup_switch import CupSwitch
 
 LEFT_MOTOR_PWM_GPIO = 18
 LEFT_MOTOR_DIRECTION_GPIOS = (23, 24)
 RIGHT_MOTOR_PWM_GPIO = 13
 RIGHT_MOTOR_DIRECTION_GPIOS = (5, 6)
 
-PHOTODIODE_GPIO = 10
+SWITCH_GPIO = 10
 
 I2C_BUS = 1
 I2C_ADDRESS = 0x27
@@ -61,6 +61,7 @@ class Robot:
             self.vision = VisionModule(CAMERA_ID)
         self.left_motor = Motor(self.pi_daemon, LEFT_MOTOR_PWM_GPIO, LEFT_MOTOR_DIRECTION_GPIOS)
         self.right_motor = Motor(self.pi_daemon, RIGHT_MOTOR_PWM_GPIO, RIGHT_MOTOR_DIRECTION_GPIOS)
+        self.switch = CupSwitch(self.pi_daemon, SWITCH_GPIO)
         if i2c:
             self.lcd_controller = LcdController(self.pi_daemon, I2C_BUS, I2C_ADDRESS)
         # self.cup_diode = CupDiode(self.pi_daemon, PHOTODIODE_GPIO)
@@ -244,9 +245,9 @@ class Robot:
             time.sleep(0.1)
 
     def waiting_cup_loop(self, target):
-        status = False
-        while status != target:
-            status = self.cup_diode.read()
+        status = None
+        while status == target:
+            status = self.switch.read()
         if target:
             print("delivery finished")
             self.publish('customer/status', "finished")
