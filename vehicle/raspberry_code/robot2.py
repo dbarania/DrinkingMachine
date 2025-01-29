@@ -211,8 +211,8 @@ class Robot:
                 break
 
     def rotate_in_place(self, direction=LEFT):
-        speed_left = -1 * direction
-        speed_right = direction
+        speed_left = -0.8 * direction
+        speed_right = 0.8*direction
         self.right_motor.update_speed(speed_right)
         self.left_motor.update_speed(speed_left)
 
@@ -256,27 +256,27 @@ class Robot:
             time.sleep(0.1)
 
     def move_forward(self):
-        self.right_motor.update_speed(1)
-        self.left_motor.update_speed(1)
+        self.right_motor.update_speed(0.8)
+        self.left_motor.update_speed(0.8)
 
     def move_backward(self):
-        self.right_motor.update_speed(-1)
-        self.left_motor.update_speed(-1)
+        self.right_motor.update_speed(-0.8)
+        self.left_motor.update_speed(-0.8)
 
     def move_mode(self, mode):
         match mode:
             case 0:
-                self.right_motor.update_speed(0.9)
-                self.left_motor.update_speed(0.5)
+                self.right_motor.update_speed(0.72)
+                self.left_motor.update_speed(0.6)
             case 1:
-                self.right_motor.update_speed(0.95)
-                self.left_motor.update_speed(0.8)
+                self.right_motor.update_speed(0.77)
+                self.left_motor.update_speed(0.65)
             case 2:
-                self.right_motor.update_speed(1)
-                self.left_motor.update_speed(1)
-            case 3:
                 self.right_motor.update_speed(0.8)
-                self.left_motor.update_speed(0.95)
+                self.left_motor.update_speed(0.8)
+            case 3:
+                self.right_motor.update_speed(0.65)
+                self.left_motor.update_speed(0.77)
             case 4:
-                self.right_motor.update_speed(0.5)
-                self.left_motor.update_speed(0.9)
+                self.right_motor.update_speed(0.6)
+                self.left_motor.update_speed(0.72)
