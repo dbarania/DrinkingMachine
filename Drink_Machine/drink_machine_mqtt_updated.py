@@ -3,6 +3,7 @@ import RPi.GPIO as GPIO
 import time
 import math
 import threading
+import re
 
 # Configuration
 broker = "192.168.0.197"  # Replace with your broker's address
@@ -19,11 +20,11 @@ topics = ["customer/1", "customer/2", "car/status", "drink", "control"]  # Topic
 client_id = "drink_machine"  # Unique client ID
 RUNNING = True  # Global variable to control the loop
 
-flow_rate_pump_1 = 1 # liters per minute
-flow_rate_pump_2 = 1 # liters per minute
+flow_rate_pump_1 = 0.39 # liters per minute
+flow_rate_pump_2 = 0.435 # liters per minute
 drink_size = 0.2 # liters
-dist_to_sensor_1 = 20 # distance from bottom of bucket to sensor 1 (cm)
-dist_to_sensor_2 = 20 # distance from bottom of bucket to sensor 2 (cm)
+dist_to_sensor_1 = 39.7 # distance from bottom of bucket to sensor 1 (cm)
+dist_to_sensor_2 = 39.7 # distance from bottom of bucket to sensor 2 (cm)
 
 # bucket details (for estimating liters of liquid left)
 r_bottom = 11.4 # radius at bottom of the bucket (cm)
@@ -31,8 +32,8 @@ r_top = 14.3 # radius at 10 liter mark (cm)
 h_bucket = 19.1 # height of the bucket (cm)
 
 # pins
-pump_1_pin = 23
-pump_2_pin = 24
+pump_1_pin = 24
+pump_2_pin = 23
 dist_1_trigger_pin = 5
 dist_2_trigger_pin = 17
 dist_1_echo_pin = 6
@@ -55,6 +56,7 @@ drinks = ("Gin & tonic", "Gin", "Tonic")
 order_queue = []
 menu_index = 0 # Index of drink currently shown on the ordering screen
 cancel_flag = 0
+confirm_flag = 0
 car_status = "Idle" # Idle or Busy
 
 class customer:
@@ -186,6 +188,7 @@ def calibrate_dist_sensors(client, sensor_1 = 1, sensor_2 = 1):
 def mix_drink(client, drink):
     # container 1 has gin, container 2 has tonic
     print("started mix_drink")
+    print(f"{drink}")
     global drink_size
     gin_ratio = 0.5
     tonic_ratio = 1 - gin_ratio
@@ -194,6 +197,7 @@ def mix_drink(client, drink):
         if volume_1 > drink_size * gin_ratio and volume_2 > drink_size * tonic_ratio:
             client.publish("drink_machine/drink_status", "0")
             client.loop()
+            print("damn")
             time_1 = gin_ratio * float(drink_size/(flow_rate_pump_1/60)) # how long to run the gin pump
             time_2 = tonic_ratio * float(drink_size/(flow_rate_pump_2/60)) # how long to run the tonic pump
             # pour gin
@@ -386,6 +390,7 @@ def pump_run(client, message, pump_number):
             client.loop()           
             client.publish("drink_machine/status", "Idle")
             client.loop()
+            drink_container_levels(client)
         except ValueError:
             # If message doesn't contain a valid number, handle the error
             client.publish("drink_machine/messages", "Invalid runtime specified for pump 1. Can be max 10 seconds.")
@@ -396,8 +401,8 @@ def pump_run(client, message, pump_number):
             _, number = message.split("run")
             runtime = int(number)  # Convert to an integer
             n = runtime
-            if runtime > 10:  # Cap the runtime at 10 seconds
-                runtime = 10
+            if runtime > 20:  # Cap the runtime at 10 seconds
+                runtime = 20
             GPIO.output(pump_2_pin, GPIO.HIGH)
             client.publish("drink_machine/pump/2", "On")
             client.loop()
@@ -421,6 +426,7 @@ def pump_run(client, message, pump_number):
             client.loop()
             client.publish("drink_machine/status", "Idle")
             client.loop()
+            drink_container_levels(client)
         except ValueError:
             # If message doesn't contain a valid number, handle the error
             client.publish("drink_machine/messages", "Invalid runtime specified for pump 2. Must be below 10 seconds.")
@@ -481,7 +487,7 @@ def calibrate_pump(client, message, pump_number):
                     client.loop()
                     new_volume_1, new_volume_2 = drink_container_levels(client, 1)
                     pumped_volume = volume_1 - new_volume_1
-                    flow_rate_pump_1 = pumped_volume * (runtime / 60)
+                    flow_rate_pump_1 = pumped_volume / (runtime / 60)
                     client.publish("drink_machine/messages", f"Pumped {pumped_volume} liters.\nFlow rate for pump 1 updated to {flow_rate_pump_1} liters/min.")
                     client.loop()
                 else:
@@ -526,7 +532,7 @@ def calibrate_pump(client, message, pump_number):
                     client.loop()
                     new_volume_1, new_volume_2 = drink_container_levels(client, 1)
                     pumped_volume = volume_2 - new_volume_2
-                    flow_rate_pump_2 = pumped_volume * (runtime / 60)
+                    flow_rate_pump_2 = pumped_volume / (runtime / 60)
                     client.publish("drink_machine/messages", f"Pumped {pumped_volume} liters.\nFlow rate for pump 2 updated to {flow_rate_pump_2} liters/min.")
                     client.loop()
                 else:
@@ -548,12 +554,14 @@ topic: control
     4: calibrate dist sensor 2 (run when container 2 is empty)
     5: pump_1 calibrate x (calibrate pump 1. Turns on pump 1 for x seconds)
     6: pump_2 calibrate x (calibrate pump 2. Turns on pump 2 for x seconds)
-    7: pump_1 run x (run pump 1 for x seconds. x is int <= 10)
-    8: pump_2 run x (run pump 2 for x seconds. x is int <= 10)
-    9: pump_1 pour x (pour x liters from container 1. x is float <= 1)
-    10: pump_2 pour x (pour x liters from container 2. x is float <= 1)
-    11: stop (stops any running pump)
-    12: commands (show all commands)"""
+    7: pump_1 t l x y (manual calibration, x=seconds, l=liters)
+    8: pump_1 t l x y (manual calibration, x=seconds, l=liters)
+    9: pump_1 run x (run pump 1 for x seconds. x is int <= 10)
+    10: pump_2 run x (run pump 2 for x seconds. x is int <= 10)
+    11: pump_1 pour x (pour x liters from container 1. x is float <= 1)
+    12: pump_2 pour x (pour x liters from container 2. x is float <= 1)
+    13: stop (stops any running pump)
+    14: commands (show all commands)"""
     client.publish("drink_machine/messages", message)
     client.loop()
 
@@ -578,7 +586,7 @@ def ordering(client ,message, topic):
     global order_queue
     global menu_index
     global drinks
-    global cancel_flag
+    global cancel_flag, confirm_flag
     customer = int(topic.split("/")[-1])
     if message == "left":
         menu_index -= 1
@@ -592,13 +600,16 @@ def ordering(client ,message, topic):
             menu_index = 0
         client.publish("car/screen", f"{drinks[menu_index]}")
         client.loop()
-    elif message == "cancel" or message == "timeout":
+    elif message == "shake" or message == "timeout":
         if cancel_flag == 1 or message == "timeout":
             menu_index = 0
+            order_queue.remove(customer)
+            client.publish("ordering_queue", f"{order_queue}")
+            client.loop()
             client.publish("car/command", "cancel")
             client.loop()
             if len(order_queue) > 0:
-                client.publish("car/command", f"{order_queue[menu_index]}")
+                client.publish("customer/current", f"{order_queue[menu_index]}")
                 client.loop()
             if customer == 1:
                 customer1.status = "Idle"
@@ -613,13 +624,21 @@ def ordering(client ,message, topic):
             cancel_flag = 1
             client.publish("car/screen", "Shake again to cancel")
             client.loop()
-    elif message == "confirm":
-        client.publish("car/command", "confirm")
-        client.loop()
-        if customer == 1:
-            customer1.status = "Waiting for drink"
-        elif customer == 2:
-            customer2.status = "Waiting for drink"
+    elif message == "up" or message == "down":
+        if confirm_flag == 1:
+            client.publish("car/command", "confirm")
+            client.loop()
+            confirm_flag = 0
+            if customer == 1:
+                customer1.status = "Waiting for drink"
+            elif customer == 2:
+                customer2.status = "Waiting for drink"
+        else:
+            confirm_flag = 1
+            client.publish("car/screen", "Confirm?")
+            client.loop()
+    if message != "shake":
+        cancel_flag = 0
 
 def queue(client, topic, add=1):
     global customer1
@@ -631,7 +650,7 @@ def queue(client, topic, add=1):
     if add == 1 and customer not in order_queue:
         order_queue.append(customer)
         if car_status == "Idle":
-            client.publish("car/command", f"{order_queue[0]}")
+            client.publish("customer/current", f"{order_queue[0]}")
             client.loop()
             car_status = "Busy"
         if customer == 1:
@@ -679,7 +698,7 @@ def update_car(client, message):
     global drinks
     global order_queue, car_status
     if message == "IDLE" and len(order_queue) > 0: # if car is idle send to customer
-        client.publish("car/command", f"{order_queue[0]}")
+        client.publish("customer/current", f"{order_queue[0]}")
         client.loop()
         car_status = "Busy"
     elif message == "ORDERING":
@@ -702,6 +721,23 @@ def update_car(client, message):
         if len(order_queue) > 0:
             order_queue.pop(0)
         client.publish("ordering_queue", f"{order_queue}")
+        client.loop()
+
+def manual_pump_cal(client, message, pump):
+    global flow_rate_pump_1, flow_rate_pump_2
+    numbers = re.findall(r'\d+\.?\d*', message)
+    runtime = int(numbers[1])
+    print(f"runtime: {runtime}")
+    liters = float(numbers[2])
+    print(f"liters: {liters}")
+    flowrate = liters/(runtime/60)
+    if pump == 1:
+        flow_rate_pump_1 = flowrate
+        client.publish("drink_machine/messages", f"Pump 1 flowrate updated to {flowrate} l/min.")
+        client.loop()
+    else:
+        flow_rate_pump_2 = flowrate
+        client.publish("drink_machine/messages", f"Pump 2 flowrate updated to {flowrate} l/min.")
         client.loop()
 
 def perform_action(client, topic, message):
@@ -732,6 +768,10 @@ def perform_action(client, topic, message):
             stop_pumps(client)
         elif message == "commands":
             commands(client)
+        elif message.startswith("pump_1 t l"):
+            manual_pump_cal(client, message, 1)
+        elif message.startswith("pump_2 t l"):
+            manual_pump_cal(client, message, 2)
         else:
             client.publish("drink_machine/messages", "Recieved unknown control command.\nUse 'commands' to see all commands.")
             client.loop()
