@@ -1,0 +1,5 @@
+
+[submodule "vehicle/pico_code/pico-sdk"]
+	path = vehicle/pico_code/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git
+	branch = master
